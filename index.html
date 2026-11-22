@@ -3119,6 +3119,8 @@
       quranSrc: 'النص بالرسم العثماني من مشروع Tanzil (رخصة CC-BY 3.0):',
       remTitle: 'تذكير موعد الأذكار', remMorning: 'أذكار الصباح', remEvening: 'أذكار المساء',
       remOn: 'تفعيل التذكير', remOff: 'إيقاف التذكير',
+      remPushFail: 'تعذّر تفعيل تنبيهات الخلفية؛ ',
+      remNotePush: 'ميزة تجريبية: من المفترض وصول التنبيه حتى مع إغلاق التطبيق خلال نحو 5 إلى 6 دقائق من الموعد تقريبًا، والوصول غير مضمون.',
       remNote: 'يعمل التذكير فقط ما دامت هذه الصفحة مفتوحة في المتصفح؛ إذا أُغلق المتصفح أو التطبيق فلن يصلك تنبيه.',
       remNoPerm: ' المتصفح لم يسمح بالإشعارات، لذلك سيظهر التذكير داخل الصفحة فقط.',
       remBannerMorning: 'حان وقت أذكار الصباح', remBannerEvening: 'حان وقت أذكار المساء', remBannerGo: 'افتح الأذكار',
@@ -3163,6 +3165,8 @@
       quranSrc: 'Uthmani-script text from the Tanzil project (CC-BY 3.0 license):',
       remTitle: 'Adhkar time reminder', remMorning: 'Morning adhkar', remEvening: 'Evening adhkar',
       remOn: 'Turn reminder on', remOff: 'Turn reminder off',
+      remPushFail: 'Background alerts could not be enabled; ',
+      remNotePush: 'Experimental: the alert should arrive even with the app closed, roughly 5 to 6 minutes of the set time; delivery is not guaranteed.',
       remNote: 'The reminder works only while this page is open in the browser; if the browser or app is closed, no alert will arrive.',
       remNoPerm: ' The browser did not allow notifications, so the reminder will appear inside the page only.',
       remBannerMorning: 'Time for morning adhkar', remBannerEvening: 'Time for evening adhkar', remBannerGo: 'Open adhkar',
@@ -3207,6 +3211,8 @@
       quranSrc: 'Texte en graphie othmane du projet Tanzil (licence CC-BY 3.0):',
       remTitle: 'Rappel des adhkar', remMorning: 'Adhkar du matin', remEvening: 'Adhkar du soir',
       remOn: 'Activer le rappel', remOff: 'Désactiver le rappel',
+      remPushFail: "Impossible d'activer les alertes en arrière-plan ; ",
+      remNotePush: "Fonction expérimentale : l'alerte devrait arriver même application fermée, dans environ 5 à 6 minutes après l'heure prévue ; la réception n'est pas garantie.",
       remNote: "Le rappel ne fonctionne que tant que cette page est ouverte dans le navigateur; si le navigateur ou l'application est fermé, aucune alerte n'arrivera.",
       remNoPerm: " Le navigateur n'a pas autorisé les notifications, le rappel apparaîtra donc dans la page seulement.",
       remBannerMorning: "C'est l'heure des adhkar du matin", remBannerEvening: "C'est l'heure des adhkar du soir", remBannerGo: 'Ouvrir les adhkar',
@@ -3820,8 +3826,8 @@
     return Uint8Array.from(raw, function (c) { return c.charCodeAt(0); });
   }
   function subscribePush() {
-    if (!pushSupported()) return;
-    navigator.serviceWorker.ready.then(function (reg) {
+    if (!pushSupported()) { settings.reminder.push = false; return Promise.resolve(false); }
+    return navigator.serviceWorker.ready.then(function (reg) {
       return reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlB64ToUint8(VAPID_PUBLIC) });
     }).then(function (sub) {
       var j = sub.toJSON();
@@ -3835,8 +3841,11 @@
         })
       });
     }).then(function (res) { return res.json(); }).then(function (ans) {
-      if (ans && ans.id) localStorage.setItem(PUSHID_KEY, ans.id);
-    }).catch(function () { /* push unavailable: in-page reminder still works */ });
+      if (ans && ans.id) { localStorage.setItem(PUSHID_KEY, ans.id); return true; }
+      return false;
+    }).catch(function () { return false; }).then(function (ok) {
+      settings.reminder.push = !!ok; saveSettings(); paintReminder(); return ok;
+    });
   }
   function unsubscribePush() {
     var id = localStorage.getItem(PUSHID_KEY);
@@ -3860,7 +3869,7 @@
     btn.classList.toggle('active', !!r.on);
     var note = document.getElementById('remNote');
     if (r.on) {
-      var txt = s.remNote;
+      var txt = r.push ? s.remNotePush : (s.remPushFail + s.remNote);
       if (!('Notification' in window) || Notification.permission === 'denied') txt += s.remNoPerm;
       note.textContent = txt;
       note.classList.remove('hidden');
@@ -3874,6 +3883,7 @@
       try { Notification.requestPermission().then(function () { paintReminder(); }); } catch (e) {}
     }
     r.on = !r.on;
+    if (!r.on) r.push = false;
     saveSettings();
     paintReminder();
     if (r.on) { subscribePush(); } else { unsubscribePush(); }
