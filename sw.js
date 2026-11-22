@@ -1,5 +1,5 @@
 // زاد المسلم اليومي — offline app shell
-var CACHE = 'ibadati-v14';
+var CACHE = 'ibadati-v15';
 var ASSETS = [
   './',
   'index.html',

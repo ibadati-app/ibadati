@@ -3266,7 +3266,7 @@
   var settings = { font: 'naskh', size: 'm', lang: 'ar' };
   try {
     var sraw = localStorage.getItem(SETTINGS_KEY);
-    if (sraw) { var sv = JSON.parse(sraw); if (sv) { if (sv.font) settings.font = sv.font; if (sv.size) settings.size = sv.size; if (sv.lang) settings.lang = sv.lang; } }
+    if (sraw) { var sv = JSON.parse(sraw); if (sv) { if (sv.font) settings.font = sv.font; if (sv.size) settings.size = sv.size; if (sv.lang) settings.lang = sv.lang; if (sv.reminder && typeof sv.reminder === 'object') settings.reminder = sv.reminder; if (sv.prayerMethod) settings.prayerMethod = sv.prayerMethod; } }
   } catch (e) {}
   function saveSettings() {
     try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch (e) {}
