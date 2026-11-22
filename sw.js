@@ -1,5 +1,5 @@
-// عباداتي اليومية — offline app shell
-var CACHE = 'ibadati-v7';
+// زاد المسلم اليومي — offline app shell
+var CACHE = 'ibadati-v8';
 var ASSETS = [
   './',
   'index.html',
@@ -7,7 +7,7 @@ var ASSETS = [
   'icon-192.png',
   'icon-512.png',
   'icon-maskable-192.png',
-  'icon-maskable-512.png',
+  'icon-maskable-512.png'
 ];
 
 self.addEventListener('install', function (e) {
