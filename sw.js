@@ -1,5 +1,5 @@
 // زاد المسلم اليومي — offline app shell
-var CACHE = 'ibadati-v10';
+var CACHE = 'ibadati-v11';
 var ASSETS = [
   './',
   'index.html',
@@ -12,7 +12,14 @@ var ASSETS = [
 
 self.addEventListener('install', function (e) {
   e.waitUntil(
-    caches.open(CACHE).then(function (c) { return c.addAll(ASSETS); }).then(function () { return self.skipWaiting(); })
+    // Delete every old cache FIRST: requests below are intercepted by the previous
+    // active worker, whose cache-first handler would otherwise fill this cache with
+    // the OLD index.html and trap users on a stale version forever.
+    caches.keys().then(function (keys) {
+      return Promise.all(keys.map(function (k) { return caches.delete(k); }));
+    }).then(function () {
+      return caches.open(CACHE).then(function (c) { return c.addAll(ASSETS); });
+    }).then(function () { return self.skipWaiting(); })
   );
 });
 
@@ -24,13 +31,32 @@ self.addEventListener('activate', function (e) {
   );
 });
 
-// cache-first: the app is fully static; worship marks live in localStorage, never touched here
 self.addEventListener('fetch', function (e) {
   if (e.request.method !== 'GET') return;
+  var url = new URL(e.request.url);
+  if (url.origin !== location.origin) return;
+
+  // HTML: network-first so updates reach users immediately; cache is the offline fallback.
+  if (e.request.mode === 'navigate' || url.pathname.endsWith('/') || url.pathname.endsWith('/index.html')) {
+    e.respondWith(
+      fetch(e.request).then(function (resp) {
+        if (resp && resp.ok) {
+          var copy = resp.clone();
+          caches.open(CACHE).then(function (c) { c.put(e.request, copy); });
+        }
+        return resp;
+      }).catch(function () {
+        return caches.match(e.request, { ignoreSearch: true });
+      })
+    );
+    return;
+  }
+
+  // Static assets (icons, manifest): cache-first, network fills misses.
   e.respondWith(
-    caches.match(e.request, { ignoreSearch: true }).then(function (hit) {
+    caches.match(e.request).then(function (hit) {
       return hit || fetch(e.request).then(function (resp) {
-        if (resp && resp.ok && new URL(e.request.url).origin === location.origin) {
+        if (resp && resp.ok) {
           var copy = resp.clone();
           caches.open(CACHE).then(function (c) { c.put(e.request, copy); });
         }

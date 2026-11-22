@@ -3967,6 +3967,13 @@
   // installable/offline shell: active only when served over HTTPS with sw.js alongside
   if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
     navigator.serviceWorker.register('sw.js').catch(function () {});
+    // when an updated worker takes control, reload once so the open tab shows the new version
+    var swReloaded = false;
+    navigator.serviceWorker.addEventListener('controllerchange', function () {
+      if (swReloaded) return;
+      swReloaded = true;
+      location.reload();
+    });
   }
 })();
 </script>
