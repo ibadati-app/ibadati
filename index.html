@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="عباداتي">
+<meta name="apple-mobile-web-app-title" content="زاد المسلم">
 <title>زاد المسلم اليومي</title>
 <style>
   @font-face { font-family: 'Noto Kufi Arabic'; font-style: normal; font-weight: 400 800; font-display: swap;
@@ -3800,6 +3800,54 @@
   /* ---------- v4: adhkar reminder (works only while page is open) ---------- */
   if (typeof settings.reminder !== 'object' || !settings.reminder) settings.reminder = { on: false, m: '', e: '' };
   var REMFIRE_KEY = 'ibadati.remfire';
+  /* ---------- v5: closed-app push reminders (optional, opt-in) ---------- */
+  var PUSH_URL = 'https://ibadati-push.ibadati-push.workers.dev';
+  var VAPID_PUBLIC = 'BFtFMnfA6OKLp6TAHJ5o8lXgjayLJivJTmjP0W-76mfYCid7e6Zdcvhxh6xu1I8yAHzPZbvMzMjxucHXL1o_w88';
+  var PUSHID_KEY = 'ibadati.pushid';
+  function pushSupported() {
+    return PUSH_URL.indexOf('PLACEHOLDER') === -1 && 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+  }
+  function remTimes() {
+    var r = settings.reminder;
+    var out = [];
+    if (r.m) out.push({ id: 'sabah', time: r.m });
+    if (r.e) out.push({ id: 'masaa', time: r.e });
+    return out;
+  }
+  function urlB64ToUint8(base64) {
+    var padding = '='.repeat((4 - base64.length % 4) % 4);
+    var raw = atob((base64 + padding).replace(/-/g, '+').replace(/_/g, '/'));
+    return Uint8Array.from(raw, function (c) { return c.charCodeAt(0); });
+  }
+  function subscribePush() {
+    if (!pushSupported()) return;
+    navigator.serviceWorker.ready.then(function (reg) {
+      return reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlB64ToUint8(VAPID_PUBLIC) });
+    }).then(function (sub) {
+      var j = sub.toJSON();
+      return fetch(PUSH_URL + '/subscribe', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: localStorage.getItem(PUSHID_KEY) || undefined,
+          endpoint: j.endpoint, keys: j.keys,
+          tzOffsetMin: -new Date().getTimezoneOffset(),
+          reminders: remTimes()
+        })
+      });
+    }).then(function (res) { return res.json(); }).then(function (ans) {
+      if (ans && ans.id) localStorage.setItem(PUSHID_KEY, ans.id);
+    }).catch(function () { /* push unavailable: in-page reminder still works */ });
+  }
+  function unsubscribePush() {
+    var id = localStorage.getItem(PUSHID_KEY);
+    if (id) {
+      try { fetch(PUSH_URL + '/unsubscribe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: id }) }).catch(function () {}); } catch (e) {}
+      localStorage.removeItem(PUSHID_KEY);
+    }
+    if ('serviceWorker' in navigator && 'PushManager' in window) {
+      navigator.serviceWorker.ready.then(function (reg) { return reg.pushManager.getSubscription(); }).then(function (sub) { if (sub) sub.unsubscribe(); }).catch(function () {});
+    }
+  }
   function remFireLoad() { try { return JSON.parse(localStorage.getItem(REMFIRE_KEY)) || {}; } catch (e) { return {}; } }
   function localToday() { return new Date().toLocaleDateString('en-CA'); }
   function paintReminder() {
@@ -3828,9 +3876,10 @@
     r.on = !r.on;
     saveSettings();
     paintReminder();
+    if (r.on) { subscribePush(); } else { unsubscribePush(); }
   });
-  document.getElementById('remMorningT').addEventListener('change', function (e) { settings.reminder.m = e.target.value; saveSettings(); });
-  document.getElementById('remEveningT').addEventListener('change', function (e) { settings.reminder.e = e.target.value; saveSettings(); });
+  document.getElementById('remMorningT').addEventListener('change', function (e) { settings.reminder.m = e.target.value; saveSettings(); if (settings.reminder.on) subscribePush(); });
+  document.getElementById('remEveningT').addEventListener('change', function (e) { settings.reminder.e = e.target.value; saveSettings(); if (settings.reminder.on) subscribePush(); });
   document.getElementById('remBannerGo').addEventListener('click', function () {
     document.getElementById('remBanner').classList.add('hidden');
     showTab('adhkar');

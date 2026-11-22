@@ -1,5 +1,5 @@
 // زاد المسلم اليومي — offline app shell
-var CACHE = 'ibadati-v11';
+var CACHE = 'ibadati-v12';
 var ASSETS = [
   './',
   'index.html',
@@ -62,6 +62,32 @@ self.addEventListener('fetch', function (e) {
         }
         return resp;
       });
+    })
+  );
+});
+
+// v5: closed-app adhkar reminders via Web Push
+self.addEventListener('push', function (e) {
+  var data = {};
+  try { data = e.data ? e.data.json() : {}; } catch (err) {}
+  var title = data.title || 'زاد المسلم اليومي';
+  var body = data.body || 'حان وقت الذكر';
+  e.waitUntil(self.registration.showNotification(title, {
+    body: body,
+    icon: 'icon-192.png',
+    badge: 'icon-192.png',
+    dir: 'rtl',
+    lang: 'ar',
+    data: { url: './' }
+  }));
+});
+
+self.addEventListener('notificationclick', function (e) {
+  e.notification.close();
+  e.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function (list) {
+      for (var i = 0; i < list.length; i++) { if ('focus' in list[i]) return list[i].focus(); }
+      return clients.openWindow('./');
     })
   );
 });
