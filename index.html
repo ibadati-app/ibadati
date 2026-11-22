@@ -411,6 +411,7 @@
         <button id="remToggle" type="button"></button>
       </div>
       <p class="src-line hidden" id="remNote"></p>
+      <p class="src-line hidden" id="remDiag" style="opacity:.75"></p>
     </div>
     <div class="set-card">
       <div class="s-title" id="ptTitle"></div>
@@ -3122,6 +3123,11 @@
       remPushFail: 'تعذّر تفعيل تنبيهات الخلفية؛ ',
       remNotePush: 'ميزة تجريبية: من المفترض وصول التنبيه حتى مع إغلاق التطبيق خلال نحو 5 إلى 6 دقائق من الموعد تقريبًا، والوصول غير مضمون.',
       remNote: 'يعمل التذكير فقط ما دامت هذه الصفحة مفتوحة في المتصفح؛ إذا أُغلق المتصفح أو التطبيق فلن يصلك تنبيه.',
+      remDiagSw: 'خدمة الخلفية',
+      remDiagOld: 'قديمة — أغلق الصفحة وافتحها من جديد',
+      remDiagPerm: 'الإذن',
+      remDiagSub: 'الاشتراك',
+      remDiagNoSub: 'لا يوجد اشتراك',
       remNoPerm: ' المتصفح لم يسمح بالإشعارات، لذلك سيظهر التذكير داخل الصفحة فقط.',
       remBannerMorning: 'حان وقت أذكار الصباح', remBannerEvening: 'حان وقت أذكار المساء', remBannerGo: 'افتح الأذكار',
       ptTitle: 'مواقيت الصلاة',
@@ -3168,6 +3174,11 @@
       remPushFail: 'Background alerts could not be enabled; ',
       remNotePush: 'Experimental: the alert should arrive even with the app closed, roughly 5 to 6 minutes of the set time; delivery is not guaranteed.',
       remNote: 'The reminder works only while this page is open in the browser; if the browser or app is closed, no alert will arrive.',
+      remDiagSw: 'Background service',
+      remDiagOld: 'outdated — close and reopen the page',
+      remDiagPerm: 'Permission',
+      remDiagSub: 'Subscription',
+      remDiagNoSub: 'no subscription',
       remNoPerm: ' The browser did not allow notifications, so the reminder will appear inside the page only.',
       remBannerMorning: 'Time for morning adhkar', remBannerEvening: 'Time for evening adhkar', remBannerGo: 'Open adhkar',
       ptTitle: 'Prayer times',
@@ -3214,6 +3225,11 @@
       remPushFail: "Impossible d'activer les alertes en arrière-plan ; ",
       remNotePush: "Fonction expérimentale : l'alerte devrait arriver même application fermée, dans environ 5 à 6 minutes après l'heure prévue ; la réception n'est pas garantie.",
       remNote: "Le rappel ne fonctionne que tant que cette page est ouverte dans le navigateur; si le navigateur ou l'application est fermé, aucune alerte n'arrivera.",
+      remDiagSw: "Service d'arrière-plan",
+      remDiagOld: 'obsolète — fermez puis rouvrez la page',
+      remDiagPerm: 'Autorisation',
+      remDiagSub: 'Abonnement',
+      remDiagNoSub: 'aucun abonnement',
       remNoPerm: " Le navigateur n'a pas autorisé les notifications, le rappel apparaîtra donc dans la page seulement.",
       remBannerMorning: "C'est l'heure des adhkar du matin", remBannerEvening: "C'est l'heure des adhkar du soir", remBannerGo: 'Ouvrir les adhkar',
       ptTitle: 'Horaires de prière',
@@ -3825,9 +3841,43 @@
     var raw = atob((base64 + padding).replace(/-/g, '+').replace(/_/g, '/'));
     return Uint8Array.from(raw, function (c) { return c.charCodeAt(0); });
   }
+  function querySwVersion(ms) {
+    return new Promise(function (resolve) {
+      var done = false;
+      var finish = function (v) { if (!done) { done = true; clearTimeout(timer); navigator.serviceWorker.removeEventListener('message', onMsg); resolve(v); } };
+      var onMsg = function (e) { if (e.data && e.data.type === 'SW_VERSION') finish(e.data.version || null); };
+      var timer = setTimeout(function () { finish(null); }, ms || 1500);
+      if (!('serviceWorker' in navigator)) { finish(null); return; }
+      navigator.serviceWorker.addEventListener('message', onMsg);
+      navigator.serviceWorker.ready.then(function (reg) {
+        var w = reg.active || navigator.serviceWorker.controller;
+        if (w) w.postMessage({ type: 'SW_VERSION' }); else finish(null);
+      }).catch(function () { finish(null); });
+    });
+  }
+  function refreshRemDiag() {
+    var el = document.getElementById('remDiag');
+    if (!el) return;
+    if (!settings.reminder.on || !pushSupported()) { el.classList.add('hidden'); return; }
+    var s = S();
+    querySwVersion(1500).then(function (ver) {
+      return navigator.serviceWorker.ready.then(function (reg) {
+        return reg.pushManager.getSubscription();
+      }).then(function (sub) {
+        var tail = sub ? sub.endpoint.slice(-12) : '';
+        var perm = ('Notification' in window) ? Notification.permission : 'denied';
+        el.textContent = s.remDiagSw + ': ' + (ver || s.remDiagOld) + ' · ' + s.remDiagPerm + ': ' + perm + ' · ' + (tail ? s.remDiagSub + ' …' + tail : s.remDiagNoSub);
+        el.classList.remove('hidden');
+      });
+    }).catch(function () {});
+  }
   function subscribePush() {
     if (!pushSupported()) { settings.reminder.push = false; return Promise.resolve(false); }
     return navigator.serviceWorker.ready.then(function (reg) {
+      var upd = Promise.resolve();
+      try { upd = Promise.race([reg.update().catch(function () {}), new Promise(function (res) { setTimeout(res, 2500); })]); } catch (e) {}
+      return upd.then(function () { return reg; });
+    }).then(function (reg) {
       return reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlB64ToUint8(VAPID_PUBLIC) });
     }).then(function (sub) {
       var j = sub.toJSON();
@@ -3844,7 +3894,7 @@
       if (ans && ans.id) { localStorage.setItem(PUSHID_KEY, ans.id); return true; }
       return false;
     }).catch(function () { return false; }).then(function (ok) {
-      settings.reminder.push = !!ok; saveSettings(); paintReminder(); return ok;
+      settings.reminder.push = !!ok; saveSettings(); paintReminder(); refreshRemDiag(); return ok;
     });
   }
   function unsubscribePush() {
@@ -3873,8 +3923,11 @@
       if (!('Notification' in window) || Notification.permission === 'denied') txt += s.remNoPerm;
       note.textContent = txt;
       note.classList.remove('hidden');
+      refreshRemDiag();
     } else {
       note.classList.add('hidden');
+      var dg = document.getElementById('remDiag');
+      if (dg) dg.classList.add('hidden');
     }
   }
   document.getElementById('remToggle').addEventListener('click', function () {

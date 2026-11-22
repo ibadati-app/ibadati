@@ -1,5 +1,5 @@
 // زاد المسلم اليومي — offline app shell
-var CACHE = 'ibadati-v15';
+var CACHE = 'ibadati-v16';
 var ASSETS = [
   './',
   'index.html',
@@ -80,6 +80,13 @@ self.addEventListener('push', function (e) {
     lang: 'ar',
     data: { url: './' }
   }));
+});
+
+// readiness check: the page asks the ACTIVE worker which cache version it runs
+self.addEventListener('message', function (e) {
+  if (e.data && e.data.type === 'SW_VERSION' && e.source && e.source.postMessage) {
+    e.source.postMessage({ type: 'SW_VERSION', version: CACHE });
+  }
 });
 
 self.addEventListener('notificationclick', function (e) {
