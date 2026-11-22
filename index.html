@@ -253,10 +253,9 @@
   body.ff-kufi .d-text, body.ff-kufi .c-phrase { font-family: "Noto Kufi Arabic","Segoe UI",Tahoma,sans-serif; }
   .phon-caveat { font-size: 12px; color: var(--ink2); margin: 2px 0 14px; }
 
-  /* v4: hero language button */
-  .hero { position: relative; }
+  /* v4: hero language button (in flow, never overlaps the ring) */
+  .hero-top { max-width: 560px; margin: 0 auto 12px; display: flex; justify-content: flex-end; }
   .lang-cycle {
-    position: absolute; top: 12px; inset-inline-end: 14px; z-index: 2;
     border: 1px solid rgba(255,255,255,.45); background: rgba(255,255,255,.14); color: #fff;
     border-radius: 999px; padding: 6px 12px; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer;
   }
@@ -295,7 +294,7 @@
 <body>
 
 <div class="hero">
-  <button class="lang-cycle" id="langCycle" type="button"></button>
+  <div class="hero-top"><button class="lang-cycle" id="langCycle" type="button"></button></div>
   <div class="hero-inner">
     <div style="flex:1">
       <h1>عباداتي اليومية</h1>
